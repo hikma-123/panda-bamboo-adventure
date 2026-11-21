@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<!--
+  PANDA BAMBOO ADVENTURE
+  CIS046-3 Software for Enterprise – Assignment 1 artefact
+
+  Upgraded from "Panda Puzzle Adventure – Enterprise Edition".
+  Third-party service: University Banana API by Marc Conrad
+  (https://marcconrad.com/uob/banana/doc.php) – see js/services/bananaApi.js.
+  Fonts: "Baloo 2" and "Nunito" from Google Fonts (SIL Open Font License).
+  AI assistance: structure, rendering and UI code were developed with help from
+  an LLM (Anthropic Claude) and reviewed/adapted by the student – see README.md.
+-->
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Panda Bamboo Adventure</title>
+  <meta name="description" content="A three-level panda platformer powered by the University Banana API." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700;800&family=Nunito:wght@500;600;700;800;900&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+<div class="app" id="app">
+
+  <!-- ============ GAME WORLD (always full-screen, also renders menu backdrops) ============ -->
+  <canvas id="gameCanvas" aria-label="Panda Bamboo Adventure game world"></canvas>
+  <div class="vignette" aria-hidden="true"></div>
+  <div class="flash" id="screenFlash" aria-hidden="true"></div>
+
+  <!-- ============ IN-GAME HUD ============ -->
+  <header class="hud" id="hud" hidden>
+    <div class="hud-left">
+      <div class="hud-level">
+        <span class="hud-level-tag" id="hudLevelTag">LEVEL 1</span>
+        <span class="hud-level-name" id="hudLevelName">Bamboo Forest</span>
+      </div>
+      <div class="hud-progress" title="Distance to the gate">
+        <div class="hud-progress-fill" id="hudProgress"></div>
+        <div class="hud-progress-gate"></div>
+      </div>
+    </div>
+
+    <div class="hud-center">
+      <div class="hud-stat hud-bamboo" id="hudBambooBox" title="Bamboo collected / needed to open the gate">
+        <i data-icon="bamboo"></i><b id="hudBamboo">0</b><small>/ <span id="hudBambooTarget">0</span></small>
+      </div>
+      <div class="hud-stat hud-lives" id="hudLives" title="Lives"></div>
+      <div class="hud-stat hud-score" title="Score">
+        <small>SCORE</small><b id="hudScore">0</b>
+      </div>
+    </div>
+
+    <div class="hud-right">
+      <div class="api-indicator" id="hudApi" data-state="idle" title="University Banana API status">
+        <span class="api-panda"><i data-icon="pandaApi"></i><span class="api-lamp"></span></span>
+        <div class="api-indicator-text"><strong>Banana API</strong><small id="hudApiStatus">Ready</small></div>
+      </div>
+      <div class="challenge-chips" id="hudChallenges" aria-label="API challenge progress"></div>
+      <button class="icon-btn" id="hudMusicBtn" title="Music (M)" aria-label="Toggle music"></button>
+      <button class="icon-btn" id="hudSfxBtn" title="Sound effects (N)" aria-label="Toggle sound effects"></button>
+      <button class="icon-btn" id="hudPauseBtn" title="Pause (P / Esc)" aria-label="Pause"></button>
+    </div>
+  </header>
+
+  <div class="objective" id="objective" hidden></div>
+  <div class="reaction" id="reaction" hidden></div>
+
+  <div class="touch-controls" id="touchControls" hidden>
+    <div class="touch-move">
+      <button class="touch-btn" id="touchLeft" aria-label="Move left"><i data-icon="left"></i></button>
+      <button class="touch-btn" id="touchRight" aria-label="Move right"><i data-icon="right"></i></button>
+    </div>
+    <button class="touch-btn touch-jump" id="touchJump" aria-label="Jump"><i data-icon="up"></i></button>
+  </div>
+
+  <!-- ============ TITLE SCREEN ============ -->
+  <section class="screen title-screen active" id="titleScreen">
+    <div class="title-layout">
+      <div class="title-copy">
+        <div class="title-kicker"><span class="api-panda sm"><i data-icon="pandaApi"></i><span class="api-lamp live"></span></span> Powered by the University Banana API</div>
+        <h1 class="game-logo" aria-label="Panda Bamboo Adventure">
+          <span class="logo-line logo-1">Panda</span>
+          <span class="logo-line logo-2">Bamboo</span>
+          <span class="logo-line logo-3">Adventure</span>
+        </h1>
+        <p class="title-tag">Three magical worlds. One hungry panda. Real puzzles from a live university web service.</p>
+
+        <div class="title-actions">
+          <button class="btn btn-primary btn-xl" id="playBtn"><i data-icon="play"></i><span id="playBtnLabel">Play</span></button>
+          <button class="btn btn-glass btn-xl" id="mapBtn"><i data-icon="map"></i>Locations</button>
+          <button class="btn btn-gold btn-xl lab-cta" id="labBtn"><i data-icon="pandaApi"></i>Banana API Lab</button>
+        </div>
+
+        <div class="title-secondary">
+          <button class="chip-btn chip-api" id="practiceApiBtn"><i data-icon="pandaApi"></i>Banana API Live Demo</button>
+          <button class="chip-btn" id="authBtn"><i data-icon="user"></i><span id="authBtnLabel">Login</span></button>
+          <button class="chip-btn" id="devBtn"><i data-icon="terminal"></i>System &amp; Diagnostics</button>
+          <button class="chip-btn chip-reset" id="resetBtn"><i data-icon="refresh"></i>Reset Progress</button>
+          <button class="chip-btn icon-only" id="titleMusicBtn" aria-label="Toggle music"></button>
+          <button class="chip-btn icon-only" id="fullscreenBtn" aria-label="Toggle full screen"><i data-icon="expand"></i></button>
+        </div>
+
+        <div class="identity-strip">
+          <span class="identity-avatar" id="identityAvatar">G</span>
+          <span id="identityLabel">Playing as Guest</span>
+          <span class="dot-sep"></span>
+          <span>Best <b id="titleBest">0</b></span>
+          <span class="dot-sep"></span>
+          <span><b id="titleUnlocked">1</b>/3 worlds</span>
+        </div>
+      </div>
+
+      <div class="title-mascot">
+        <div class="mascot-halo"></div>
+        <div class="mascot-stage mascot-xl" id="titleMascot"></div>
+        <div class="mascot-bubble title-bubble" id="titleBubble">Let's find some bamboo!</div>
+      </div>
+    </div>
+
+    <div class="title-footer">
+      <span><kbd>&larr;</kbd><kbd>&rarr;</kbd> / <kbd>A</kbd><kbd>D</kbd> move</span>
+      <span><kbd>Space</kbd> / <kbd>&uarr;</kbd> jump</span>
+      <span><kbd>P</kbd> pause</span>
+      <span><kbd>M</kbd> music</span>
+    </div>
+  </section>
+
+  <!-- ============ LOCATION SELECT ============ -->
+  <section class="screen map-screen" id="mapScreen">
+    <div class="map-top">
+      <button class="btn btn-glass btn-sm" id="mapBackBtn"><i data-icon="left"></i>Back</button>
+      <div class="map-title">
+        <h2>Choose Your Location</h2>
+        <p>Tap a locked world to play its University Banana API challenge and unlock it</p>
+      </div>
+      <div class="map-stats">
+        <button class="btn btn-ghost btn-sm" id="mapResetBtn" title="Play from the beginning"><i data-icon="refresh"></i>Reset</button>
+        <button class="btn btn-gold btn-sm" id="mapLabBtn"><i data-icon="pandaApi"></i>API Lab</button>
+        <div><i data-icon="bamboo"></i><b id="mapTotalBamboo">0</b><small>bamboo</small></div>
+        <div><i data-icon="star"></i><b id="mapRewardPoints">0</b><small>reward pts</small></div>
+        <div><i data-icon="trophy"></i><b id="mapAchievements">0</b><small>achievements</small></div>
+      </div>
+    </div>
+
+    <div class="map-cards" id="mapCards"></div>
+
+    <div class="challenge-track" id="challengeTrack" aria-label="Banana API challenge track"></div>
+  </section>
+
+
+  <!-- ============ BANANA API LAB (interoperability showcase) ============ -->
+  <section class="screen lab-screen" id="labScreen">
+    <div class="lab-top">
+      <button class="btn btn-glass btn-sm" id="labBackBtn"><i data-icon="left"></i>Back</button>
+      <div class="lab-title">
+        <div class="lab-kicker"><span class="api-panda sm"><i data-icon="pandaApi"></i><span class="api-lamp live"></span></span> Interoperability showcase</div>
+        <h2>Banana API Lab</h2>
+        <p>See exactly how Panda Bamboo Adventure talks to the University Banana API – live.</p>
+      </div>
+      <div class="lab-kpis" id="labKpis"></div>
+    </div>
+
+    <div class="lab-grid">
+      <section class="lab-card lab-arch">
+        <header><h3><i data-icon="bolt"></i>Live architecture</h3><span class="lab-hint">Packets move on every real request – in the Lab or in the game</span></header>
+        <div class="arch-wrap" id="archWrap"></div>
+        <div class="proto-facts">
+          <span><b>Protocol</b>HTTPS (TLS)</span>
+          <span><b>Method</b>GET, no body</span>
+          <span><b>Format</b>JSON</span>
+          <span><b>Image</b>PNG as base64</span>
+          <span><b>Auth</b>none (public API)</span>
+          <span><b>Client ↔ Server</b>JavaScript ↔ PHP</span>
+          <span><b>Coupling</b>JSON contract only</span>
+        </div>
+      </section>
+
+      <section class="lab-card lab-play">
+        <header><h3><i data-icon="terminal"></i>API Playground</h3><span class="lab-hint">Build a request and send it live</span></header>
+        <div class="param-table">
+          <div class="param-row"><span class="param-k">endpoint</span><code>marcconrad.com/uob/banana/api.php</code><span class="param-note">University Banana API</span></div>
+          <div class="param-row"><span class="param-k">out</span><code>json</code><span class="param-note">response format</span></div>
+          <div class="param-row"><span class="param-k">base64</span>
+            <span class="seg-group"><button type="button" class="seg on" data-b64="yes">yes</button><button type="button" class="seg" data-b64="no">no</button></span>
+            <span class="param-note">image as data (yes) or as a link (no)</span></div>
+          <div class="param-row"><span class="param-k">simulate</span>
+            <select id="playSimulate" aria-label="Simulate a failure">
+              <option value="">off – real request</option>
+              <option value="network">network failure</option>
+              <option value="timeout">timeout</option>
+              <option value="http500">HTTP 500 error</option>
+            </select>
+            <span class="param-note">resilience test (Lab only)</span></div>
+        </div>
+        <code class="play-url" id="playUrl"></code>
+        <div class="play-actions">
+          <button class="btn btn-gold" id="playSendBtn"><i data-icon="bolt"></i>Send live request</button>
+          <button class="btn btn-glass btn-sm" id="playChallengeBtn"><i data-icon="pandaApi"></i>Play it as a challenge</button>
+        </div>
+        <div class="play-result" id="playResult" data-state="idle">
+          <div class="play-status" id="playStatus">No request sent yet.</div>
+          <div class="view-tabs">
+            <button type="button" class="seg on" data-view="panda">Panda style</button>
+            <button type="button" class="seg" data-view="original">Original image</button>
+            <button type="button" class="seg" data-view="json">JSON</button>
+          </div>
+          <div class="play-preview" id="playPreview"></div>
+          <pre class="play-json" id="playJson" hidden></pre>
+          <div class="play-answer" id="playAnswerRow" hidden>
+            <input id="playAnswer" type="text" inputmode="numeric" maxlength="2" placeholder="?" aria-label="Your answer" />
+            <button class="btn btn-primary btn-sm" id="playCheckBtn"><i data-icon="check"></i>Check against API solution</button>
+            <span class="play-feedback" id="playFeedback"></span>
+          </div>
+        </div>
+      </section>
+
+      <section class="lab-card lab-pipe">
+        <header><h3><i data-icon="refresh"></i>Request pipeline</h3><span class="lab-hint" id="pipeTitle"></span></header>
+        <div id="pipeBars"></div>
+      </section>
+
+      <section class="lab-card lab-log">
+        <header><h3><i data-icon="code"></i>Request log</h3><button class="btn btn-ghost btn-sm" id="logClearBtn">Clear log</button></header>
+        <div class="log-table" id="logTable"></div>
+      </section>
+
+      <section class="lab-card lab-charts">
+        <header><h3><i data-icon="star"></i>Analytics</h3><span class="lab-hint">from every request this browser made</span></header>
+        <div class="charts">
+          <figure><canvas id="chartLatency"></canvas><figcaption>Response time per request (ms)</figcaption></figure>
+          <figure><canvas id="chartAccuracy"></canvas><figcaption>Answer accuracy</figcaption></figure>
+          <figure><canvas id="chartDigits"></canvas><figcaption>Solutions returned by the API (0–9)</figcaption></figure>
+        </div>
+      </section>
+    </div>
+  </section>
+
+  <!-- ============ OVERLAYS ============ -->
+  <div class="overlay" id="resetModal" hidden role="dialog" aria-modal="true" aria-labelledby="resetTitle">
+    <div class="panel panel-center">
+      <div class="panel-kicker danger">Start over</div>
+      <h2 class="panel-title" id="resetTitle">Play from the beginning?</h2>
+      <p class="panel-note" id="resetNote"></p>
+      <ul class="reset-list">
+        <li>Mystic Bamboo Valley and Panda's Secret World lock again</li>
+        <li>All Banana API challenges become unsolved</li>
+        <li>Scores, stars, bamboo totals and achievements are cleared</li>
+        <li>Your account, sound settings and the API log are kept</li>
+      </ul>
+      <div class="panel-actions">
+        <button class="btn btn-glass" id="resetCancelBtn">Cancel</button>
+        <button class="btn btn-danger" id="resetConfirmBtn"><i data-icon="refresh"></i>Reset &amp; start again</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="overlay" id="pauseOverlay" hidden>
+    <div class="panel panel-center">
+      <div class="panel-kicker">Game paused</div>
+      <h2 class="panel-title">Taking a bamboo break</h2>
+      <div class="panel-actions vertical">
+        <button class="btn btn-primary" id="resumeBtn"><i data-icon="play"></i>Resume</button>
+        <button class="btn btn-glass" id="restartLevelBtn"><i data-icon="refresh"></i>Restart Level</button>
+        <button class="btn btn-glass" id="pauseMapBtn"><i data-icon="map"></i>Locations</button>
+        <div class="toggle-row">
+          <button class="toggle" id="pauseMusicToggle"><i data-icon="music"></i><span>Music</span><em></em></button>
+          <button class="toggle" id="pauseSfxToggle"><i data-icon="sound"></i><span>Sound FX</span><em></em></button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="overlay" id="levelCompleteOverlay" hidden>
+    <div class="panel panel-center panel-wide">
+      <div class="panel-kicker" id="lcKicker">Level complete</div>
+      <h2 class="panel-title" id="lcTitle">Bamboo Forest cleared!</h2>
+      <div class="stars" id="lcStars"><i data-icon="star"></i><i data-icon="star"></i><i data-icon="star"></i></div>
+      <div class="tally">
+        <div><small>Bamboo</small><b id="lcBamboo">0</b></div>
+        <div><small>Challenge reward</small><b id="lcReward">0</b></div>
+        <div><small>Lives bonus</small><b id="lcLives">0</b></div>
+        <div class="tally-total"><small>Level score</small><b id="lcScore">0</b></div>
+      </div>
+      <p class="panel-note" id="lcNote"></p>
+      <div class="panel-actions">
+        <button class="btn btn-glass" id="lcReplayBtn"><i data-icon="refresh"></i>Replay</button>
+        <button class="btn btn-glass" id="lcMapBtn"><i data-icon="map"></i>Locations</button>
+        <button class="btn btn-primary" id="lcNextBtn"><i data-icon="right"></i>Next World</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="overlay" id="gameOverOverlay" hidden>
+    <div class="panel panel-center">
+      <div class="panel-kicker danger">Out of lives</div>
+      <h2 class="panel-title">The panda needs a nap</h2>
+      <div class="tally compact">
+        <div><small>Score</small><b id="goScore">0</b></div>
+        <div><small>Bamboo</small><b id="goBamboo">0</b></div>
+      </div>
+      <div class="panel-actions">
+        <button class="btn btn-glass" id="goMapBtn"><i data-icon="map"></i>Locations</button>
+        <button class="btn btn-primary" id="goRetryBtn"><i data-icon="refresh"></i>Try Again</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="overlay unlock-overlay" id="unlockOverlay" hidden>
+    <div class="unlock-rays" aria-hidden="true"></div>
+    <div class="unlock-stage">
+      <div class="unlock-kicker">New location unlocked</div>
+      <div class="unlock-card" id="unlockCard">
+        <canvas class="unlock-thumb" id="unlockThumb" width="520" height="300"></canvas>
+        <div class="unlock-lock" id="unlockLock"><i data-icon="lock"></i></div>
+        <div class="unlock-shards" id="unlockShards"></div>
+      </div>
+      <h2 class="unlock-name" id="unlockName">Mystic Bamboo Valley</h2>
+      <p class="unlock-desc" id="unlockDesc"></p>
+      <button class="btn btn-primary btn-xl" id="unlockContinueBtn"><i data-icon="right"></i>Continue</button>
+    </div>
+  </div>
+
+  <div class="overlay completion-overlay" id="completionOverlay" hidden>
+    <canvas class="confetti" id="confettiCanvas"></canvas>
+    <div class="completion-layout">
+      <div class="completion-mascot">
+        <div class="mascot-halo gold"></div>
+        <div class="mascot-stage mascot-xl" id="completionMascot"></div>
+      </div>
+      <div class="completion-copy">
+        <div class="panel-kicker gold">Adventure complete</div>
+        <h2 class="completion-title">You found the Golden Bamboo!</h2>
+        <p class="completion-sub">All three worlds restored and every Banana API seal solved.</p>
+        <div class="completion-score">
+          <div><small>Final score</small><b id="finalScore">0</b></div>
+          <div><small>Total bamboo</small><b id="finalBamboo">0</b></div>
+          <div><small>API puzzles solved</small><b id="finalPuzzles">0</b></div>
+        </div>
+        <h3 class="ach-heading">Achievements</h3>
+        <div class="ach-grid" id="achGrid"></div>
+        <div class="panel-actions">
+          <button class="btn btn-glass" id="completionMapBtn"><i data-icon="map"></i>Locations</button>
+          <button class="btn btn-primary" id="completionTitleBtn"><i data-icon="home"></i>Title Screen</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ UNIVERSITY BANANA API CHALLENGE (visual layer only) ============ -->
+  <div class="challenge" id="challengeModal" hidden role="dialog" aria-modal="true" aria-labelledby="challengeTitle">
+    <div class="challenge-backdrop"></div>
+    <div class="challenge-sparkles" id="challengeSparkles" aria-hidden="true"></div>
+    <div class="challenge-shell">
+      <aside class="challenge-side">
+        <div class="mascot-halo"></div>
+        <div class="mascot-stage mascot-lg" id="challengeMascot"></div>
+        <div class="mascot-bubble" id="challengeBubble">Let's solve it together!</div>
+      </aside>
+
+      <div class="challenge-card" id="challengeCard">
+        <div class="card-glow" aria-hidden="true"></div>
+        <header class="challenge-head">
+          <div>
+            <div class="challenge-tier" id="challengeTier">API Challenge · Level 1</div>
+            <h2 id="challengeTitle">Bomb Defuse</h2>
+            <p id="challengeDesc">Solve the puzzle to defuse the bomb.</p>
+          </div>
+          <div class="challenge-rounds" id="challengeRounds"></div>
+        </header>
+
+        <div class="api-banner">
+          <span class="api-panda lg"><i data-icon="pandaApi"></i><span class="api-lamp" id="chApiLamp"></span></span>
+          <div class="api-banner-text">
+            <strong>University Banana API</strong>
+            <code id="chEndpoint">GET marcconrad.com/uob/banana/api.php?out=json</code>
+          </div>
+          <span class="live-pill">LIVE</span>
+          <span class="api-meta" id="chApiMeta">waiting</span>
+        </div>
+
+        <div class="puzzle-board" id="puzzleBoard">
+          <div class="board-panda" aria-hidden="true">
+            <svg viewBox="0 0 160 70" xmlns="http://www.w3.org/2000/svg">
+              <circle cx="40" cy="20" r="15" fill="#18181b"/><circle cx="120" cy="20" r="15" fill="#18181b"/>
+              <circle cx="40" cy="20" r="7" fill="#3f3f46"/><circle cx="120" cy="20" r="7" fill="#3f3f46"/>
+              <ellipse cx="80" cy="66" rx="54" ry="46" fill="#ffffff"/>
+              <ellipse cx="70" cy="34" rx="22" ry="10" fill="#ffffff" opacity="0.6"/>
+              <g class="peek-eyes">
+                <ellipse cx="60" cy="52" rx="11" ry="13" transform="rotate(-15 60 52)" fill="#18181b"/>
+                <ellipse cx="100" cy="52" rx="11" ry="13" transform="rotate(15 100 52)" fill="#18181b"/>
+                <circle cx="62" cy="55" r="5" fill="#fff"/><circle cx="98" cy="55" r="5" fill="#fff"/>
+                <circle cx="63" cy="57" r="3" fill="#0b0d14"/><circle cx="99" cy="57" r="3" fill="#0b0d14"/>
+              </g>
+              <ellipse cx="44" cy="62" rx="9" ry="5" fill="#fb7185" opacity="0.45"/><ellipse cx="116" cy="62" rx="9" ry="5" fill="#fb7185" opacity="0.45"/>
+              <g class="peek-paws">
+                <ellipse cx="24" cy="64" rx="17" ry="10" fill="#18181b"/><ellipse cx="136" cy="64" rx="17" ry="10" fill="#18181b"/>
+                <circle cx="17" cy="60" r="2.6" fill="#f9a8d4"/><circle cx="24" cy="58" r="2.6" fill="#f9a8d4"/><circle cx="31" cy="60" r="2.6" fill="#f9a8d4"/>
+                <circle cx="129" cy="60" r="2.6" fill="#f9a8d4"/><circle cx="136" cy="58" r="2.6" fill="#f9a8d4"/><circle cx="143" cy="60" r="2.6" fill="#f9a8d4"/>
+              </g>
+            </svg>
+          </div>
+        <div class="puzzle-frame" id="puzzleFrame">
+          <div class="puzzle-loading" id="puzzleLoading">
+            <div class="spinner"><span></span><span></span><span></span></div>
+            <span id="puzzleLoadingText">Requesting a fresh puzzle from the API…</span>
+          </div>
+          <img id="puzzleImg" alt="Puzzle image returned by the University Banana API" hidden />
+          <span class="skin-badge" id="skinBadge" hidden><i data-icon="pandaApi"></i><span id="skinBadgeText">Panda skin</span></span>
+          <div class="puzzle-error" id="puzzleError" hidden>
+            <i data-icon="alert"></i>
+            <h3 id="puzzleErrorTitle">Couldn't reach the Banana API</h3>
+            <p id="puzzleErrorMsg"></p>
+          </div>
+          <pre class="json-view" id="jsonView" hidden></pre>
+        </div>
+        </div>
+
+        <form class="answer-row" id="answerForm" autocomplete="off" novalidate>
+          <label for="answerInput" class="sr-only">Your answer</label>
+          <div class="answer-input-wrap">
+            <span class="answer-label">Answer</span>
+            <input id="answerInput" type="text" inputmode="numeric" maxlength="2" placeholder="?" disabled />
+          </div>
+          <button type="submit" class="btn btn-primary btn-answer" id="answerSubmit" disabled><i data-icon="check"></i>Submit</button>
+        </form>
+        <div class="keypad" id="keypad" aria-label="Number keypad"></div>
+
+        <div class="challenge-feedback" id="challengeFeedback" aria-live="polite"></div>
+
+        <footer class="challenge-foot">
+          <div class="foot-left">
+            <button class="btn btn-ghost btn-sm" id="jsonToggleBtn"><i data-icon="code"></i><span>View API JSON</span></button>
+            <button class="btn btn-ghost btn-sm" id="skinToggleBtn" hidden><i data-icon="image"></i><span>Show original API image</span></button>
+          </div>
+          <div class="foot-right">
+            <button class="btn btn-ghost btn-sm" id="retryPuzzleBtn" hidden><i data-icon="refresh"></i>Fetch New Puzzle</button>
+            <button class="btn btn-danger btn-sm" id="forfeitBtn">Take the Hit</button>
+          </div>
+        </footer>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ VIRTUAL IDENTITY (login / register) ============ -->
+  <div class="overlay" id="authModal" hidden role="dialog" aria-modal="true" aria-labelledby="authModalTitle">
+    <div class="panel panel-center auth-panel">
+      <div class="panel-kicker">Virtual identity</div>
+      <h2 class="panel-title" id="authModalTitle">Panda Account Login</h2>
+      <p class="panel-note">Passwords are stored only as a salted SHA-256 digest. Your session is kept in a cookie and your progress is saved per player.</p>
+      <div class="auth-tabs">
+        <button type="button" class="auth-tab active" id="tabLogin">Login</button>
+        <button type="button" class="auth-tab" id="tabRegister">Create Account</button>
+      </div>
+      <form id="authForm" autocomplete="on">
+        <label class="field">
+          <span>Username</span>
+          <input id="usernameInput" type="text" maxlength="18" placeholder="e.g. panda" autocomplete="username" required />
+        </label>
+        <label class="field">
+          <span>Password</span>
+          <span class="pass-wrap">
+            <input id="passwordInput" type="password" minlength="4" placeholder="At least 4 characters" autocomplete="current-password" required />
+            <button type="button" class="toggle-pass" id="togglePassBtn" aria-label="Show password"><i data-icon="eye"></i></button>
+          </span>
+        </label>
+        <div class="auth-row">
+          <label class="check"><input type="checkbox" id="rememberCookie" checked /> Remember me for 30 days</label>
+          <small class="demo-hint">Demo: panda / 1234</small>
+        </div>
+        <div class="auth-error" id="authError" role="alert"></div>
+        <div class="panel-actions">
+          <button type="button" class="btn btn-glass" id="closeAuthBtn">Cancel</button>
+          <button type="submit" class="btn btn-primary" id="authSubmitBtn">Login</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ============ SYSTEM & DIAGNOSTICS (kept from original, for the assessment demo) ============ -->
+  <div class="overlay dev-overlay" id="devPanel" hidden>
+    <div class="dev-panel">
+      <header class="dev-head">
+        <div>
+          <h2>System &amp; Diagnostics</h2>
+          <small>EventBus stream · Banana API telemetry · Virtual identity · Automated tests</small>
+        </div>
+        <div class="dev-actions">
+          <button class="btn btn-glass btn-sm" id="exportJsonBtn">Export Telemetry JSON</button>
+          <button class="btn btn-primary btn-sm" id="runDiagnosticsBtn">Run Automated Tests</button>
+          <button class="icon-btn" id="closeDevBtn" aria-label="Close"></button>
+        </div>
+      </header>
+      <div class="kpi-grid">
+        <div class="kpi"><small>API avg round-trip</small><b id="kpiLatency">-- ms</b></div>
+        <div class="kpi"><small>Puzzle accuracy</small><b id="kpiAccuracy">-- %</b></div>
+        <div class="kpi"><small>Avg solve time</small><b id="kpiSolveTime">-- s</b></div>
+        <div class="kpi"><small>API requests / errors</small><b id="kpiRequests">0 / 0</b></div>
+      </div>
+      <div class="dev-grid">
+        <section class="dev-card">
+          <h3>Live EventBus stream</h3>
+          <div class="event-log" id="eventLogBox"></div>
+        </section>
+        <section class="dev-card">
+          <h3>Virtual identity &amp; storage</h3>
+          <div class="event-log" id="identityStateBox"></div>
+        </section>
+      </div>
+      <section class="dev-card">
+        <h3>Automated unit &amp; integration tests</h3>
+        <div id="diagnosticsList"></div>
+      </section>
+    </div>
+  </div>
+
+  <div class="toasts" id="toasts" aria-live="polite"></div>
+
+  <div class="cookie-banner hidden" id="cookieBanner">
+    <p>We use a session cookie for your virtual identity and local storage for your game progress.</p>
+    <button class="btn btn-primary btn-sm" id="acceptCookieBtn">Accept</button>
+  </div>
+</div>
+
+<!-- Scripts are plain (non-module) files so the game also runs by double-clicking index.html.
+     Load order matters: core → services → game → ui → main. -->
+<script src="js/core/eventBus.js"></script>
+<script src="js/core/storage.js"></script>
+<script src="js/services/bananaApi.js"></script>
+<script src="js/services/authService.js"></script>
+<script src="js/services/telemetry.js"></script>
+<script src="js/services/apiLog.js"></script>
+<script src="js/services/audio.js"></script>
+<script src="js/game/levels.js"></script>
+<script src="js/game/pandaRenderer.js"></script>
+<script src="js/game/environment.js"></script>
+<script src="js/game/input.js"></script>
+<script src="js/game/engine.js"></script>
+<script src="js/ui/icons.js"></script>
+<script src="js/ui/mascot.js"></script>
+<script src="js/ui/pandaSkin.js"></script>
+<script src="js/ui/challenge.js"></script>
+<script src="js/ui/screens.js"></script>
+<script src="js/ui/lab.js"></script>
+<script src="js/ui/diagnostics.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>
